@@ -11,6 +11,7 @@ import java.util.Map;
 import org.bson.Document;
 
 import com.amazonaws.services.lambda.runtime.Context;
+import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
@@ -32,37 +33,59 @@ public class Hello implements RequestHandler<APIGatewayProxyRequestEvent, APIGat
 
         APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent()
                 .withHeaders(headers);
-        // try {
-        // final String pageContents =
-        // this.getPageContents("https://checkip.amazonaws.com");
-        // String output = String.format("{ \"message\": \"hello world\", \"location\":
-        // \"%s\" }", pageContents);
 
-        String postgresResult = testPostgresConnectivity(context);
-        String docdbResult = testDocumentDBConnectivity(context);
+        // Obtener query parameters
+        Map<String, String> queryParams = input.getQueryStringParameters();
+        log(context, "El valor de queryParams es: " + queryParams);
+        String dbType = queryParams != null && queryParams.containsKey("dbType") ? queryParams.get("dbType") : "all";
+        log(context, "El valor de dbType es: " + dbType);
 
-        // Respuesta final
-        String finalMessage = String.format(
-            "Resultado de PostgreSQL: %s\nResultado de DocumentDB: %s",
-            postgresResult, docdbResult
-        );
+        String postgresResult = "";
+        String docdbResult = "";
+        String postgresProxyResult = "";
+        String docdbProxyResult = "";
+        String finalMessage = "";
+
+        if (dbType.equalsIgnoreCase("none")) {
+            return response
+                .withStatusCode(200)
+                .withBody("No se ejecuto nada.");
+        }
+
+        if (dbType.equalsIgnoreCase("postgres") || dbType.equalsIgnoreCase("all")) {
+            String host = System.getenv("PG_HOST");
+            postgresResult = testPostgresConnectivity(context, host);
+        }
+        
+        if (dbType.equalsIgnoreCase("postgres-proxy") || dbType.equalsIgnoreCase("all")) {
+            String host = System.getenv("PG_PROXY_ENDPOINT");
+            postgresProxyResult = testPostgresConnectivity(context, host);
+        }
+        
+        if (dbType.equalsIgnoreCase("documentdb") || dbType.equalsIgnoreCase("all")) {
+            docdbResult = testDocumentDBConnectivity(context);
+        }
+
+        if (dbType.equalsIgnoreCase("postgres")) {
+            finalMessage = String.format("dbType: %s, Resultado de PostgreSQL: %s", dbType, postgresResult);
+        } else if (dbType.equalsIgnoreCase("documentdb")) {
+            finalMessage = String.format("dbType: %s, Resultado de DocumentDB: %s", dbType, docdbResult);
+        } else {
+            finalMessage = String.format(
+                    "dbType: %s, Resultado de PostgreSQL: %s, Resultado de PostgreSQL-proxy: %s, Resultado de DocumentDB: %s, Resultado de DocumentDB-proxy: %s",
+                    dbType, postgresResult, postgresProxyResult, docdbResult, docdbProxyResult);
+        }
 
         return response
                 .withStatusCode(200)
                 .withBody(finalMessage);
-        // } catch (IOException e) {
-        // return response
-        // .withBody("{}")
-        // .withStatusCode(500);
-        // }
     }
 
     // -------------------------------------------------------------------------
     // Subfunción para probar conectividad a PostgreSQL
     // -------------------------------------------------------------------------
-    private String testPostgresConnectivity(Context context) {
+    private String testPostgresConnectivity(Context context, String host) {
         // Variables de entorno para RDS PostgreSQL
-        String host = System.getenv("PG_HOST");
         String port = System.getenv("PG_PORT");
         String dbName = System.getenv("PG_DBNAME");
         String user = System.getenv("PG_USER");
@@ -98,13 +121,22 @@ public class Hello implements RequestHandler<APIGatewayProxyRequestEvent, APIGat
         } finally {
             // Cerrar ResultSet, Statement y Connection en orden inverso
             if (rs != null) {
-                try { rs.close(); } catch (SQLException ignored) {}
+                try {
+                    rs.close();
+                } catch (SQLException ignored) {
+                }
             }
             if (stmt != null) {
-                try { stmt.close(); } catch (SQLException ignored) {}
+                try {
+                    stmt.close();
+                } catch (SQLException ignored) {
+                }
             }
             if (conn != null) {
-                try { conn.close(); } catch (SQLException ignored) {}
+                try {
+                    conn.close();
+                } catch (SQLException ignored) {
+                }
             }
         }
 
@@ -116,26 +148,27 @@ public class Hello implements RequestHandler<APIGatewayProxyRequestEvent, APIGat
     // -------------------------------------------------------------------------
     private String testDocumentDBConnectivity(Context context) {
         // Variables de entorno para DocumentDB
-        String docdbHost = System.getenv("DOCDB_HOST");     // p.e. docdb-cluster.cluster-xxxxxx.us-east-1.docdb.amazonaws.com
-        String docdbPort = System.getenv("DOCDB_PORT");     // 27017, usualmente
+        String docdbHost = System.getenv("DOCDB_HOST"); // p.e.
+                                                        // docdb-cluster.cluster-xxxxxx.us-east-1.docdb.amazonaws.com
+        String docdbPort = System.getenv("DOCDB_PORT"); // 27017, usualmente
         String docdbUser = System.getenv("DOCDB_USER");
         String docdbPassword = System.getenv("DOCDB_PASSWORD");
         String docdbDatabase = System.getenv("DOCDB_DBNAME"); // p.e. "admin" u otro
 
         // Construir la URI para DocumentDB (con SSL y replicaSet si corresponde)
-        // Nota: Ajusta los parámetros ?ssl=true&replicaSet=rs0 según la configuración de tu cluster
+        // Nota: Ajusta los parámetros ?ssl=true&replicaSet=rs0 según la configuración
+        // de tu cluster
         String docdbUri = String.format(
-            "mongodb://%s:%s@%s:%s/%s?ssl=true&replicaSet=rs0&retryWrites=false",
-            docdbUser, docdbPassword, docdbHost, docdbPort, docdbDatabase
-        );
+                "mongodb://%s:%s@%s:%s/%s?ssl=true&replicaSet=rs0&retryWrites=false",
+                docdbUser, docdbPassword, docdbHost, docdbPort, docdbDatabase);
 
         log(context, "Conectando a DocumentDB con URI: " + docdbUri);
 
         try {
             ConnectionString connectionString = new ConnectionString(docdbUri);
             MongoClientSettings settings = MongoClientSettings.builder()
-                .applyConnectionString(connectionString)
-                .build();
+                    .applyConnectionString(connectionString)
+                    .build();
 
             // Uso de try-with-resources para asegurar cierre de recursos
             try (MongoClient mongoClient = MongoClients.create(settings)) {
@@ -145,7 +178,8 @@ public class Hello implements RequestHandler<APIGatewayProxyRequestEvent, APIGat
                 Document pingResult = database.runCommand(new Document("ping", 1));
                 log(context, "Ping a DocumentDB -> " + pingResult.toJson());
 
-                // Como verificación adicional, podríamos listar colecciones o la versión del servidor
+                // Como verificación adicional, podríamos listar colecciones o la versión del
+                // servidor
                 Document buildInfo = database.runCommand(new Document("buildInfo", 1));
                 return "DocumentDB buildInfo: " + buildInfo.toJson();
             }

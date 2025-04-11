@@ -1,19 +1,27 @@
 package helloworld;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.Test;
+
+import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 
 import example.Hello;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import org.junit.Test;
 
 public class AppTest {
   @Test
   public void successfulResponse() {
     Hello app = new Hello();
-    APIGatewayProxyResponseEvent result = app.handleRequest(null, null);
+    APIGatewayProxyRequestEvent input = new APIGatewayProxyRequestEvent();
+    Map<String, String> queryStringParameters = new HashMap<>();
+    queryStringParameters.put("dbType", "null");
+    input.setQueryStringParameters(queryStringParameters);
+    APIGatewayProxyResponseEvent result = app.handleRequest(input, null);
     assertEquals(200, result.getStatusCode().intValue());
     assertEquals("application/json", result.getHeaders().get("Content-Type"));
     String content = result.getBody();
