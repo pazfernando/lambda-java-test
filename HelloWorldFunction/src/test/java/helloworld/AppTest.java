@@ -19,15 +19,12 @@ public class AppTest {
     Hello app = new Hello();
     APIGatewayProxyRequestEvent input = new APIGatewayProxyRequestEvent();
     Map<String, String> queryStringParameters = new HashMap<>();
-    queryStringParameters.put("dbType", "null");
+    queryStringParameters.put("dbType", "none");
     input.setQueryStringParameters(queryStringParameters);
     APIGatewayProxyResponseEvent result = app.handleRequest(input, null);
     assertEquals(200, result.getStatusCode().intValue());
     assertEquals("application/json", result.getHeaders().get("Content-Type"));
     String content = result.getBody();
     assertNotNull(content);
-    // assertTrue(content.contains("\"message\""));
-    // assertTrue(content.contains("\"hello world\""));
-    // assertTrue(content.contains("\"location\""));
   }
 }

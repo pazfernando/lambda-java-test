@@ -43,7 +43,6 @@ public class Hello implements RequestHandler<APIGatewayProxyRequestEvent, APIGat
         String postgresResult = "";
         String docdbResult = "";
         String postgresProxyResult = "";
-        String docdbProxyResult = "";
         String finalMessage = "";
 
         if (dbType.equalsIgnoreCase("none")) {
@@ -68,12 +67,18 @@ public class Hello implements RequestHandler<APIGatewayProxyRequestEvent, APIGat
 
         if (dbType.equalsIgnoreCase("postgres")) {
             finalMessage = String.format("dbType: %s, Resultado de PostgreSQL: %s", dbType, postgresResult);
+        } else if (dbType.equalsIgnoreCase("postgres-proxy")) {
+            finalMessage = String.format("dbType: %s, Resultado de PostgreSQL-proxy: %s", dbType, postgresProxyResult);
         } else if (dbType.equalsIgnoreCase("documentdb")) {
             finalMessage = String.format("dbType: %s, Resultado de DocumentDB: %s", dbType, docdbResult);
-        } else {
+        } else if (dbType.equalsIgnoreCase("all")) {
             finalMessage = String.format(
-                    "dbType: %s, Resultado de PostgreSQL: %s, Resultado de PostgreSQL-proxy: %s, Resultado de DocumentDB: %s, Resultado de DocumentDB-proxy: %s",
-                    dbType, postgresResult, postgresProxyResult, docdbResult, docdbProxyResult);
+                    "dbType: %s, Resultado de PostgreSQL: %s, Resultado de PostgreSQL-proxy: %s, Resultado de DocumentDB: %s",
+                    dbType, postgresResult, postgresProxyResult, docdbResult);
+        } else {
+            return response
+                .withStatusCode(500)
+                .withBody("dbType not supported.");
         }
 
         return response
